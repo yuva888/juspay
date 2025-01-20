@@ -17,6 +17,15 @@ const SCREEN_HEIGHT = Dimensions.get("window").height;
 const App = () => {
   const [selectedShape, setSelectedShape] = useState("box");
   const [circleVisible, setCircleVisible] = useState(false);
+  const [boxActions, setBoxActions] = useState([]);
+  const [circleActions, setCircleActions] = useState([]);
+  const [boxState, setBoxState] = useState({
+    x: 0,
+    y: 0,
+    rotation: 0,
+    scale: 1,
+  });
+  const [circleState, setCircleState] = useState({ x: 0, y: 0, scale: 1 });
 
   const boxPan = useRef(new Animated.ValueXY()).current;
   const boxRotation = useRef(new Animated.Value(0)).current;
@@ -33,6 +42,11 @@ const App = () => {
       ),
       onPanResponderRelease: () => {
         boxPan.extractOffset();
+        setBoxState((prev) => ({
+          ...prev,
+          x: prev.x + boxPan.x._value,
+          y: prev.y + boxPan.y._value,
+        }));
       },
     })
   ).current;
@@ -46,59 +60,102 @@ const App = () => {
       ),
       onPanResponderRelease: () => {
         circlePan.extractOffset();
+        setCircleState((prev) => ({
+          ...prev,
+          x: prev.x + circlePan.x._value,
+          y: prev.y + circlePan.y._value,
+        }));
       },
     })
   ).current;
 
-  const animateXBy100 = () => {
-    const targetPan = selectedShape === "box" ? boxPan : circlePan;
-
-    targetPan.flattenOffset();
-    Animated.timing(targetPan.x, {
-      toValue: targetPan.x._value + 100,
-      duration: 500,
-      useNativeDriver: true,
-    }).start(() => {
-      targetPan.extractOffset();
-    });
-  };
-
-  const animateYBy100 = () => {
-    const targetPan = selectedShape === "box" ? boxPan : circlePan;
-
-    targetPan.flattenOffset();
-    Animated.timing(targetPan.y, {
-      toValue: targetPan.y._value + 100,
-      duration: 500,
-      useNativeDriver: true,
-    }).start(() => {
-      targetPan.extractOffset();
-    });
-  };
-
-  const rotateBox = (degrees) => {
+  const addAction = (action) => {
     if (selectedShape === "box") {
-      Animated.timing(boxRotation, {
-        toValue: degrees,
-        duration: 500,
-        useNativeDriver: true,
-      }).start();
+      setBoxActions([...boxActions, action]);
+    } else {
+      setCircleActions([...circleActions, action]);
     }
   };
 
-  const changeSize = (increment) => {
+  const playActions = () => {
+    const actions = selectedShape === "box" ? boxActions : circleActions;
+    const setState = selectedShape === "box" ? setBoxActions : setCircleActions;
+    setState([]);
+    actions.reduce((promise, action) => {
+      return promise.then(() => {
+        return new Promise((resolve) => {
+          action(resolve);
+        });
+      });
+    }, Promise.resolve());
+  };
+
+  const animateXBy100 = (callback) => {
+    const targetPan = selectedShape === "box" ? boxPan : circlePan;
+    const currentState = selectedShape === "box" ? boxState : circleState;
+    const setState = selectedShape === "box" ? setBoxState : setCircleState;
+
+    Animated.timing(targetPan.x, {
+      toValue: currentState.x + 100,
+      duration: 500,
+      useNativeDriver: true,
+    }).start(() => {
+      setState((prev) => ({ ...prev, x: prev.x + 100 }));
+      callback();
+    });
+  };
+
+  const animateYBy100 = (callback) => {
+    const targetPan = selectedShape === "box" ? boxPan : circlePan;
+    const currentState = selectedShape === "box" ? boxState : circleState;
+    const setState = selectedShape === "box" ? setBoxState : setCircleState;
+
+    Animated.timing(targetPan.y, {
+      toValue: currentState.y + 100,
+      duration: 500,
+      useNativeDriver: true,
+    }).start(() => {
+      setState((prev) => ({ ...prev, y: prev.y + 100 }));
+      callback();
+    });
+  };
+
+  const rotateBox = (degrees, callback) => {
+    if (selectedShape === "box") {
+      Animated.timing(boxRotation, {
+        toValue: boxState.rotation + degrees,
+        duration: 500,
+        useNativeDriver: true,
+      }).start(() => {
+        setBoxState((prev) => ({ ...prev, rotation: prev.rotation + degrees }));
+        callback();
+      });
+    } else {
+      callback();
+    }
+  };
+
+  const changeSize = (increment, callback) => {
     const targetScale = selectedShape === "box" ? boxScale : circleScale;
-    const newValue = Math.max(0.5, targetScale._value + increment);
+    const currentState = selectedShape === "box" ? boxState : circleState;
+    const setState = selectedShape === "box" ? setBoxState : setCircleState;
+
+    const newScale = Math.max(0.5, currentState.scale + increment);
     Animated.spring(targetScale, {
-      toValue: newValue,
+      toValue: newScale,
       friction: 2,
       tension: 80,
       useNativeDriver: true,
-    }).start();
+    }).start(() => {
+      setState((prev) => ({ ...prev, scale: newScale }));
+      callback();
+    });
   };
 
-  const moveToRandomPosition = () => {
+  const moveToRandomPosition = (callback) => {
     const targetPan = selectedShape === "box" ? boxPan : circlePan;
+    const setState = selectedShape === "box" ? setBoxState : setCircleState;
+
     const randomX = Math.random() * (SCREEN_WIDTH - 150);
     const randomY = Math.random() * (SCREEN_HEIGHT - 150);
 
@@ -106,18 +163,25 @@ const App = () => {
       toValue: { x: randomX, y: randomY },
       duration: 500,
       useNativeDriver: true,
-    }).start();
+    }).start(() => {
+      setState({ x: randomX, y: randomY, scale: 1 });
+      callback();
+    });
   };
 
-  const moveToOrigin = () => {
+  const moveToOrigin = (callback) => {
     const targetPan = selectedShape === "box" ? boxPan : circlePan;
+    const setState = selectedShape === "box" ? setBoxState : setCircleState;
+
     Animated.timing(targetPan, {
       toValue: { x: 0, y: 0 },
       duration: 500,
       useNativeDriver: true,
-    }).start();
+    }).start(() => {
+      setState({ x: 0, y: 0, scale: 1 });
+      callback();
+    });
   };
-
   return (
     <SafeAreaView style={{ flex: 1 }}>
       <View style={styles.container}>
@@ -159,55 +223,70 @@ const App = () => {
             horizontal
             contentContainerStyle={styles.buttonScrollView}
           >
-            <TouchableOpacity style={styles.button} onPress={animateXBy100}>
-              <Text style={styles.buttonText}>Animate X by 100</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.button} onPress={animateYBy100}>
-              <Text style={styles.buttonText}>Animate Y by 100</Text>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={() => addAction((callback) => animateXBy100(callback))}
+            >
+              <Text style={styles.buttonText}>Add Animate X by 100</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.button}
-              onPress={() => rotateBox(45)}
+              onPress={() => addAction((callback) => animateYBy100(callback))}
             >
-              <Text style={styles.buttonText}>Rotate by 45°</Text>
+              <Text style={styles.buttonText}>Add Animate Y by 100</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.button}
-              onPress={() => rotateBox(90)}
+              onPress={() => addAction((callback) => rotateBox(45, callback))}
             >
-              <Text style={styles.buttonText}>Rotate by 90°</Text>
+              <Text style={styles.buttonText}>Add Rotate by 45°</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.button}
-              onPress={() => changeSize(0.1)}
+              onPress={() => addAction((callback) => rotateBox(90, callback))}
             >
-              <Text style={styles.buttonText}>Increase Size</Text>
+              <Text style={styles.buttonText}>Add Rotate by 90°</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.button}
-              onPress={() => changeSize(-0.1)}
+              onPress={() => addAction((callback) => changeSize(0.1, callback))}
             >
-              <Text style={styles.buttonText}>Decrease Size</Text>
+              <Text style={styles.buttonText}>Add Increase Size</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.button}
-              onPress={moveToRandomPosition}
+              onPress={() =>
+                addAction((callback) => changeSize(-0.1, callback))
+              }
             >
-              <Text style={styles.buttonText}>Move to Random Position</Text>
+              <Text style={styles.buttonText}>Add Decrease Size</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.button} onPress={moveToOrigin}>
-              <Text style={styles.buttonText}>Move to Origin</Text>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={() =>
+                addAction((callback) => moveToRandomPosition(callback))
+              }
+            >
+              <Text style={styles.buttonText}>Add Random Position</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.button}
+              onPress={() => addAction((callback) => moveToOrigin(callback))}
+            >
+              <Text style={styles.buttonText}>Add Move to Origin</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
-
+        <TouchableOpacity style={styles.button} onPress={playActions}>
+          <Text style={styles.buttonText}>Play Actions</Text>
+        </TouchableOpacity>
         <View style={styles.animationContainer}>
           <Text style={styles.titleText}>Drag this shape!</Text>
 
