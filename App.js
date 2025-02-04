@@ -298,4 +298,4 @@ const styles = StyleSheet.create({
   buttonText: { color: "white", fontWeight: "bold" },
 });
 
-export default App;
+export default App; //added lion and cat animations
