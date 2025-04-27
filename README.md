@@ -1,1 +1,1 @@
-# juspay
+# scratch-mit-rn
